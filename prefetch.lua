@@ -17,7 +17,7 @@ function prefetch.refresh()
         if os.time() > prefetch.list[k] then
             local qtype, qname = k:match('^c_(%d+)_(.*)')
             prefetch.list[k] = nil
-            if prefetch.debug > 0 then print('refreshing:', qname, qtype) end
+            if prefetch.debug > 1 then print('refreshing:', qname, qtype) end
             resolve(qname, kres.type[qtype], kres.class.IN)
         end
     end
@@ -34,6 +34,8 @@ end
 
 prefetch.layer = {
     consume = function (_, req, pkt)
+        local qry = req:current()
+        if qry.stype ~= kres.type.A then return end
         local records = pkt:section(kres.section.ANSWER)
         if #records < 1 then
             return
@@ -42,9 +44,8 @@ prefetch.layer = {
             local rr = records[i]
             if rr.type == kres.type.A or rr.type == kres.type.CNAME then
                 local k = 'c_' .. rr.type .. '_' .. kres.dname2str(rr.owner)
-                if prefetch[k] == nil then
-                    prefetch.list[k] = rr.ttl+os.time() -- ttl valid until now()+ttl
-                end
+                if prefetch.list[k] ~= nil then return end
+                prefetch.list[k] = rr.ttl+os.time() -- ttl valid until now()+ttl
             end
         end
     end
