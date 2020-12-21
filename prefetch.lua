@@ -2,14 +2,52 @@
 local prefetch = {
     list = {},
     debug = 0,
+    persist = false, -- persist restart (e.g. periodically save to file and load on init)
+    persist_dumpfile = 'prefetch.dat',
 }
 
 function prefetch.init()
     prefetch.ev_trigger = event.after(0, prefetch.refresh)
+    prefetch.ev_persist = event.after(60 * sec, prefetch.dump)
+    prefetch.load()
 end
 
 function prefetch.deinit()
     prefetch.list = {}
+end
+
+function prefetch.config(config)
+    config = config or {}
+    if type(config) ~= 'table' then
+        error('[prefetch] configuration must be a table or nil')
+    end
+    if config.debug then prefetch.debug = config.debug end
+    if config.persist then prefetch.persist = config.persist end
+    prefetch.deinit()
+    prefetch.init()
+end
+
+function prefetch.dump()
+    if not prefetch.persist then return end
+    local f = assert(io.open(prefetch.persist_dumpfile, 'w'), string.format('cannot open "%s" for writing', prefetch.persist_dumpfile))
+    for k,v in pairs(prefetch.list) do
+        f:write('prefetch.RR{"' .. k .. '",' .. v .. '}')
+        f:write('\n')
+    end
+    f:close()
+    prefetch.ev_persist = event.after(60 * sec, prefetch.dump)
+end
+
+function prefetch.load()
+    if not prefetch.persist then return end
+    local f = io.open(prefetch.persist_dumpfile,"r")
+    if f == nil then return end
+    io.close(f)
+    dofile(prefetch.persist_dumpfile)
+end
+
+function prefetch.RR(r)
+    prefetch.list[tostring(r[1])] = tonumber(r[2])
 end
 
 function prefetch.refresh()
